@@ -1,0 +1,128 @@
+//Kayla Haines
+//Feb 3 2021
+
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define BUFFER_SIZE 10
+#define READ_END 0
+#define WRITE_END 1
+
+//compare functions for qsort()
+int compare_greatest(const void *a, const void *b)
+{
+	return(*(int*)b - *(int*)a);
+}
+int compare_least(const void *a, const void *b)
+{
+        return(*(int*)a - *(int*)b);
+}
+
+//function to be called by child function
+//performs kaprekar operation for a 3 digit number
+int kaprekar(int n)
+{
+	int greatest = 0;
+	int least = 0;
+	int result = 0;
+	int input[3];
+	int i;//for loops
+	//create array for input number
+	for(i = 0; i < 3; i++)
+	{
+		input[i] = n % 10;
+		n = n/10;
+	}
+	//sort in ascending order to find greatest
+	qsort(input, 3, sizeof(int), compare_greatest);
+	for(i = 0; i < 3; i++)
+	{
+		greatest = greatest * 10 + input[i];
+	}
+	//printf("greatest num: %d", greatest);
+	//sort in descending order to find smallest
+	qsort(input, 3, sizeof(int), compare_least);
+	for(i = 0; i < 3; i++)
+	{
+		least = least * 10 + input[i];
+	}
+	//printf("smallest num: %d", least);
+	//subtract smallest from greatest
+	result = greatest - least;
+	printf("%d - %d = %d ", greatest,least,result);
+	return result;
+}
+
+int main(int argc, char *argv[])
+{
+
+	int n;
+	char write_msg[BUFFER_SIZE];
+	char read_msg[BUFFER_SIZE];
+	int fd[2];
+	pid_t pid;
+
+	//for user input
+	if (argc == 1) {
+		fprintf(stderr,"Usage: ./hw1 <starting value>\n");
+
+		return -1;
+	}
+
+	n = atoi(argv[1]); //  n is the input starting value
+
+	//create pipe
+	if(pipe(fd) == -1)
+	{
+		fprintf(stderr, "Pipe failed");
+		return 1;
+	}
+	//create child process with fork
+	pid = fork();
+
+	if(pid < 0)//then error
+	{
+		fprintf(stderr, "Fork Failed");
+		return 1;
+	}
+
+	if(pid > 0)//parent process
+	{
+		//close unused write end of pipe
+		close(fd[WRITE_END]);
+		//wait for child to complete
+		wait(NULL);
+		//Read message from child
+		read(fd[READ_END], read_msg, BUFFER_SIZE);
+                printf("Read result from child: %s\n", read_msg);
+                close(fd[READ_END]);
+
+	}
+	else//child process
+	{
+		int current = n;
+		int prev = 0;
+		int round = 1;
+		//repeatedly call kaprekar until convergence
+		while(current != prev)
+		{
+                        prev = current;
+                        current = kaprekar(current);
+                        printf("Child proccess %d round %d: %d\n", getpid(),round,current);
+			round++;
+		}
+		//write converged result to parent
+                sprintf(write_msg,"%d",current);
+                write(fd[WRITE_END], write_msg, strlen(write_msg)+1);
+
+		//close write end of pipe
+		close(fd[WRITE_END]);
+		//close read end of the pipe
+		close(fd[READ_END]);
+	}
+
+	return 0;
+}
